@@ -136,3 +136,22 @@ class FeaturesConnector(nn.Module):
 
     def extra_repr(self):
         return self.mode
+
+class OutputLayer(nn.Module):
+    '''
+    the blending layer is used to blend the calculated RGB image with the composite image 
+    '''
+    def __init__(self, in_channels , blending = False, activate_arg = 3.0) -> None:
+        super(OutputLayer,self).__init__()
+        self.to_rgb = nn.Conv2d(in_channels, 3, kernel_size=1)
+        self.blending = blending
+        self.activate_arg = activate_arg
+        if blending:
+            self.conv_attention = nn.Conv2d(in_channels, 1, kernel_size=1)
+        
+    def forward(self, encoder_output, input_image):
+        if self.blending:
+            attention_map = torch.sigmoid(self.activate_arg * self.conv_attention(encoder_output))
+            return attention_map * self.to_rgb(encoder_output) + (1 - attention_map) * input_image
+        else:
+            return self.to_rgb(encoder_output)

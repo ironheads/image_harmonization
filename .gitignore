@@ -2,3 +2,7 @@
 *__pycache__*
 *.so
 *.ipynb_checkpoints*
+
+harmonization_exps/
+
+pretrained_models/

@@ -134,7 +134,7 @@ class SimpleHTrainer(object):
                     self.save_visualization(splitted_batch_data, outputs, global_step, prefix='train')
 
             self.sw.add_scalar(tag=f'{log_prefix}States/learning_rate',
-                               value=self.lr if self.lr_scheduler is None else self.lr_scheduler.get_lr()[-1],
+                               value=self.lr if self.lr_scheduler is None else self.lr_scheduler.get_last_lr()[-1],
                                global_step=global_step)
 
             tbar.set_description(f'Epoch {epoch}, training loss {train_loss/(i+1):.6f}')

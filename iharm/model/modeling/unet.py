@@ -3,7 +3,7 @@ from torch import nn as nn
 from functools import partial
 
 from iharm.model.modeling.basic_blocks import ConvBlock
-from iharm.model.ops import FeaturesConnector
+from iharm.model.ops import FeaturesConnector,OutputLayer
 
 
 class UNetEncoder(nn.Module):
@@ -81,10 +81,11 @@ class UNetEncoder(nn.Module):
 
 class UNetDecoder(nn.Module):
     def __init__(self, depth, encoder_blocks_channels, norm_layer,
-                 attention_layer=None, attend_from=3, image_fusion=False):
+                 attention_layer=None, attend_from=3, output_image = True,image_fusion=False):
         super(UNetDecoder, self).__init__()
         self.up_blocks = nn.ModuleList()
         self.image_fusion = image_fusion
+        self.output_image = output_image
         in_channels = encoder_blocks_channels.pop()
         out_channels = in_channels
         # Last encoder layer doesn't pool, so there're only (depth - 1) deconvs
@@ -98,22 +99,19 @@ class UNetDecoder(nn.Module):
                 attention_layer=stage_attention_layer,
             ))
             in_channels = out_channels
+        if self.output_image:
+            self.output_channels = 3
+            self.image_layer = OutputLayer(out_channels,blending=self.image_fusion)
+        else:
+            self.output_channels = out_channels
 
-        if self.image_fusion:
-            self.conv_attention = nn.Conv2d(out_channels, 1, kernel_size=1)
-        self.to_rgb = nn.Conv2d(out_channels, 3, kernel_size=1)
 
     def forward(self, encoder_outputs, input_image, mask):
         output = encoder_outputs[0]
         for block, skip_output in zip(self.up_blocks, encoder_outputs[1:]):
             output = block(output, skip_output, mask)
-
-        if self.image_fusion:
-            attention_map = torch.sigmoid(3.0 * self.conv_attention(output))
-            output = attention_map * input_image + (1.0 - attention_map) * self.to_rgb(output)
-        else:
-            output = self.to_rgb(output)
-
+        if self.output_image:
+            output = self.image_layer(output, input_image)
         return output
 
 

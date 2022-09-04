@@ -1,0 +1,3 @@
+[submodule "external/3DLUT"]
+	path = external/3DLUT
+	url = https://github.com/HuiZeng/Image-Adaptive-3DLUT

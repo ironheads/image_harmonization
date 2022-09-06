@@ -10,8 +10,8 @@ def main():
     model_script = load_module(args.model_path)
 
     cfg = init_experiment(args)
-
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.benchmark = False
     torch.multiprocessing.set_sharing_strategy('file_system')
     model_script.main(cfg)
 

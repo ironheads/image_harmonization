@@ -19,8 +19,8 @@ class CDTNet(nn.Module):
     self, 
     encoder_decoder_depth,
     norm_layer=nn.BatchNorm2d,
-    high_resolution = 2048,
-    low_resolution = 256, 
+    high_resolution = 1024, 
+    low_resolution = 256,
     batchnorm_from=2,
     attend_from=3, 
     attention_mid_k=2.0,
@@ -33,8 +33,10 @@ class CDTNet(nn.Module):
     LUT_channels = 33,
     ) -> None:
         super(CDTNet, self).__init__()
+        # low_resolution = high_resolution // (2**(encoder_decoder_depth-1))
         assert  (high_resolution % low_resolution == 0),"high_resolution must be divisible by low_resolution"
-        self.downsample = nn.AvgPool2d(high_resolution//low_resolution)
+        self.lowResolutionPicture = partial(nn.functional.interpolate, size=(low_resolution,low_resolution), mode='bilinear', align_corners=True)
+        self.lowResolutionMask = partial(nn.functional.interpolate, size=(low_resolution,low_resolution), mode='nearest')
         self.encoder = UNetEncoder(
             encoder_decoder_depth, ch,
             norm_layer, batchnorm_from, max_channels,
@@ -71,15 +73,16 @@ class CDTNet(nn.Module):
         self.refine_module = RefinementModule(self.decoder.output_channels+7,2*self.decoder.output_channels)
 
     def forward(self,high_resolution_image,high_resolution_mask,backbone_features=None):
-        low_resolution_image = self.downsample(high_resolution_image)
-        low_resolution_mask = self.downsampleMask(high_resolution_mask)
+        low_resolution_image = self.lowResolutionPicture(high_resolution_image)
+        low_resolution_mask = self.lowResolutionMask(high_resolution_mask)
         p2p_input = torch.cat([low_resolution_image,low_resolution_mask],1)
         encoder_output = self.encoder(p2p_input,backbone_features)
         decoder_output = self.decoder(encoder_output,low_resolution_image,low_resolution_mask)
         p2p_output = self.p2p_blending(decoder_output,low_resolution_image)
         foreground_mask = self.downsampleMask(low_resolution_mask)
         background_mask = 1 - foreground_mask
-        encoder_feature = encoder_output[0]
+        # delete detach may case l_rgb turn to nan
+        encoder_feature = encoder_output[0].detach()
 
         background_feature = self.average_pool(encoder_feature,background_mask)
         foreground_feature = self.average_pool(encoder_feature,foreground_mask)
@@ -98,19 +101,24 @@ class CDTNet(nn.Module):
                     high_resolution_c2c_output[b,:,:,:] = generate_c2c[i][b,:,:,:]*LUT_weights[b,i]
                 else:
                     high_resolution_c2c_output[b,:,:,:] += generate_c2c[i][b,:,:,:]*LUT_weights[b,i]
+   
         high_resolution_c2c_output = high_resolution_c2c_output.clamp(0,1)
         
         refine_input = torch.cat([self.upsampler(p2p_output),high_resolution_c2c_output,high_resolution_mask,self.upsampler(decoder_output)],1)
         refine_output = self.refine_module(refine_input,high_resolution_image)
         return {
-            'origin_low_resolution_image':low_resolution_image,
-            'origin_high_resolution_image':high_resolution_image,
-            'c2c_output':high_resolution_c2c_output,
-            'p2p_output':p2p_output,
-            'image': refine_output
+            'c2c_outputs':high_resolution_c2c_output,
+            'p2p_outputs':p2p_output,
+            'images': refine_output,
+            # 'weight_norm':torch.mean(LUT_weights**2),
         }
         
-               
+    def init_weights(self, func):
+        self.encoder.apply(func)
+        self.decoder.apply(func)
+        self.p2p_blending.apply(func)
+        self.refine_module.apply(func)
+        self.LUT_FC.apply(func)
 
 
 
@@ -257,6 +265,9 @@ class TV_3D(nn.Module):
         self.weight_g[:,:,(0,dim-2),:] *= 2.0
         self.weight_b = torch.ones(3,dim-1,dim,dim, dtype=torch.float)
         self.weight_b[:,(0,dim-2),:,:] *= 2.0
+        self.weight_r = torch.Tensor(self.weight_r)
+        self.weight_g = torch.Tensor(self.weight_g)
+        self.weight_b = torch.Tensor(self.weight_b)
         self.relu = torch.nn.ReLU()
 
     def forward(self, LUT):
@@ -301,5 +312,7 @@ class MaskedAveragePooling(nn.Module):
     def forward(self,x,mask):
         x = x * mask
         x = torch.sum(x,dim=(-2,-1))
-        x = x / torch.sum(mask,dim=(-2,-1))
+        mask_sum = torch.sum(mask,dim=(-2,-1))
+        # avoid the mask == 0
+        x = x / (torch.sum(mask,dim=(-2,-1))+1e-8)
         return x

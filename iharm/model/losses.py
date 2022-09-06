@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 from iharm.utils import misc
-
+from functools import partial
 
 class Loss(nn.Module):
     def __init__(self, pred_outputs, gt_outputs):
@@ -20,6 +20,25 @@ class MSE(Loss):
         loss = torch.mean((pred - label) ** 2, dim=misc.get_dims_with_exclusion(label.dim(), 0))
         return loss
 
+class L1Loss(Loss):
+    def __init__(self, pred_name='images', gt_image_name='target_images'):
+        super(L1Loss, self).__init__(pred_outputs=(pred_name,), gt_outputs=(gt_image_name,))
+    
+    def forward(self, pred, label):
+        label = label.view(pred.size())
+        loss = torch.mean(torch.abs(pred - label), dim=misc.get_dims_with_exclusion(label.dim(), 0))
+        return loss
+
+class DownsampleLabelL1Loss(Loss):
+    def __init__(self, pred_name='images', gt_image_name='target_images', low_resolution=256):
+        super(DownsampleLabelL1Loss, self).__init__(pred_outputs=(pred_name,), gt_outputs=(gt_image_name,))
+        self.downsample = self.downsamplePicture = partial(nn.functional.interpolate, size=(low_resolution,low_resolution), mode='bilinear', align_corners=True)
+    
+    def forward(self, pred, label):
+        new_label = self.downsample(label)
+        new_label = new_label.view(pred.size())
+        loss = torch.mean(torch.abs(pred - new_label), dim=misc.get_dims_with_exclusion(new_label.dim(), 0))
+        return loss
 
 class MaskWeightedMSE(Loss):
     def __init__(self, min_area=1000.0, pred_name='images',

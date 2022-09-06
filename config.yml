@@ -5,6 +5,8 @@ HFLICKR_PATH: "/data/sunzhangliang/IDIH/HFlickr"
 HDAY2NIGHT_PATH: "/data/sunzhangliang/IDIH/Hday2night"
 HCOCO_PATH: "/data/sunzhangliang/IDIH/HCOCO"
 HADOBE5K_PATH: "/data/sunzhangliang/IDIH/HAdobe5k_resized1024_1024"
+HADOBE5K_RAW_PATH: "/data/sunzhangliang/IDIH/HAdobe5k"
+REALTHINGS_PATH: "/data/sunzhangliang/RealThings"
 
 IMAGENET_PRETRAINED_MODELS:
   HRNETV2_W18_SMALL: "./pretrained_models/hrnet_w18_small_model_v2.pth"

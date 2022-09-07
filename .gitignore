@@ -7,4 +7,8 @@ harmonization_exps/
 
 pretrained_models/
 
-trilinear_cpp/
+trilinear_cpp/build/
+
+trilinear_cpp/dist/
+
+trilinear_cpp/trilinear.egg-info/

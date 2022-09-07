@@ -25,6 +25,7 @@ class CDTNet(nn.Module):
     attend_from=3, 
     attention_mid_k=2.0,
     ch=64, 
+    L=256,
     max_channels=512,
     backbone_from=-1, 
     backbone_channels=None, 
@@ -35,6 +36,7 @@ class CDTNet(nn.Module):
         super(CDTNet, self).__init__()
         # low_resolution = high_resolution // (2**(encoder_decoder_depth-1))
         assert  (high_resolution % low_resolution == 0),"high_resolution must be divisible by low_resolution"
+        self.L = L
         self.lowResolutionPicture = partial(nn.functional.interpolate, size=(low_resolution,low_resolution), mode='bilinear', align_corners=True)
         self.lowResolutionMask = partial(nn.functional.interpolate, size=(low_resolution,low_resolution), mode='nearest')
         self.encoder = UNetEncoder(
@@ -61,9 +63,9 @@ class CDTNet(nn.Module):
 
         # self.TV = TV_3D()
         self.LUT_nums = LUT_nums
-
+        self.get_L_length_encoder_feature = nn.Conv2d(min((2**(encoder_decoder_depth-1)) * ch,max_channels),self.L,1)
         self.downsampleMask = nn.AvgPool2d(2**(encoder_decoder_depth-1))
-        self.L = (2**(encoder_decoder_depth-1)) * ch
+        
         self.LUT_FC = nn.Sequential(
             nn.Linear(2*self.L,LUT_nums),
             nn.LeakyReLU(0.2)
@@ -83,8 +85,8 @@ class CDTNet(nn.Module):
         foreground_mask = self.downsampleMask(low_resolution_mask)
         background_mask = 1 - foreground_mask
         # delete detach may case l_rgb turn to nan
-        encoder_feature = encoder_output[0].detach()
-
+        encoder_feature = encoder_output[0]
+        encoder_feature = self.get_L_length_encoder_feature(encoder_feature)
         background_feature = self.average_pool(encoder_feature,background_mask)
         foreground_feature = self.average_pool(encoder_feature,foreground_mask)
         background_feature = background_feature.reshape(-1,self.L)

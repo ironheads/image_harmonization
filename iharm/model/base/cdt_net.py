@@ -73,6 +73,7 @@ class CDTNet(nn.Module):
         self.refine_module = RefinementModule(self.decoder.output_channels+7,2*self.decoder.output_channels)
 
     def forward(self,high_resolution_image,high_resolution_mask,backbone_features=None):
+        # print(high_resolution_image.min(),high_resolution_image.max())
         low_resolution_image = self.lowResolutionPicture(high_resolution_image)
         low_resolution_mask = self.lowResolutionMask(high_resolution_mask)
         p2p_input = torch.cat([low_resolution_image,low_resolution_mask],1)
@@ -92,18 +93,20 @@ class CDTNet(nn.Module):
         LUT_weights = self.LUT_FC(feature)
         # batch = LUT_weights.shape[0]
         generate_c2c = []
+        channel_first_high_resolution_image = high_resolution_image.permute(1,0,2,3).contiguous()
+        # print(channel_first_high_resolution_image.min(),channel_first_high_resolution_image.max())
         for i in range(self.LUT_nums):
-            generate_c2c.append(self.LUTs[i](high_resolution_image))
-        high_resolution_c2c_output = high_resolution_image.new(high_resolution_image.size())
-        for b in range(high_resolution_c2c_output.size(0)):
+            generate_c2c.append(self.LUTs[i](channel_first_high_resolution_image))
+        high_resolution_c2c_output = channel_first_high_resolution_image.new(channel_first_high_resolution_image.size())
+        for b in range(high_resolution_c2c_output.size(1)):
             for i in range(self.LUT_nums):
                 if i==0:
-                    high_resolution_c2c_output[b,:,:,:] = generate_c2c[i][b,:,:,:]*LUT_weights[b,i]
+                    high_resolution_c2c_output[:,b,:,:] = generate_c2c[i][:,b,:,:]*LUT_weights[b,i]
                 else:
-                    high_resolution_c2c_output[b,:,:,:] += generate_c2c[i][b,:,:,:]*LUT_weights[b,i]
+                    high_resolution_c2c_output[:,b,:,:] += generate_c2c[i][:,b,:,:]*LUT_weights[b,i]
    
         high_resolution_c2c_output = high_resolution_c2c_output.clamp(0,1)
-        
+        high_resolution_c2c_output = high_resolution_c2c_output.permute(1,0,2,3).contiguous()
         refine_input = torch.cat([self.upsampler(p2p_output),high_resolution_c2c_output,high_resolution_mask,self.upsampler(decoder_output)],1)
         refine_output = self.refine_module(refine_input,high_resolution_image)
         return {
@@ -207,8 +210,8 @@ class TrilinearInterpolationFunction(torch.autograd.Function):
         binsize = 1.000001 / (dim-1)
         W = x.size(2)
         H = x.size(3)
-        batch = x.size(0)
-        
+        batch = x.size(1)
+        # print(batch)
         assert 1 == trilinear.forward(lut, 
                                       x, 
                                       output,
@@ -253,33 +256,6 @@ class TrilinearInterpolation(torch.nn.Module):
 
     def forward(self, lut, x):
         return TrilinearInterpolationFunction.apply(lut, x)
-
-
-class TV_3D(nn.Module):
-    def __init__(self, dim=33):
-        super(TV_3D,self).__init__()
-
-        self.weight_r = torch.ones(3,dim,dim,dim-1, dtype=torch.float)
-        self.weight_r[:,:,:,(0,dim-2)] *= 2.0
-        self.weight_g = torch.ones(3,dim,dim-1,dim, dtype=torch.float)
-        self.weight_g[:,:,(0,dim-2),:] *= 2.0
-        self.weight_b = torch.ones(3,dim-1,dim,dim, dtype=torch.float)
-        self.weight_b[:,(0,dim-2),:,:] *= 2.0
-        self.weight_r = torch.Tensor(self.weight_r)
-        self.weight_g = torch.Tensor(self.weight_g)
-        self.weight_b = torch.Tensor(self.weight_b)
-        self.relu = torch.nn.ReLU()
-
-    def forward(self, LUT):
-
-        dif_r = LUT.LUT[:,:,:,:-1] - LUT.LUT[:,:,:,1:]
-        dif_g = LUT.LUT[:,:,:-1,:] - LUT.LUT[:,:,1:,:]
-        dif_b = LUT.LUT[:,:-1,:,:] - LUT.LUT[:,1:,:,:]
-        tv = torch.mean(torch.mul((dif_r ** 2),self.weight_r)) + torch.mean(torch.mul((dif_g ** 2),self.weight_g)) + torch.mean(torch.mul((dif_b ** 2),self.weight_b))
-
-        mn = torch.mean(self.relu(dif_r)) + torch.mean(self.relu(dif_g)) + torch.mean(self.relu(dif_b))
-
-        return tv, mn
 
 
 class RefinementModule(nn.Module):

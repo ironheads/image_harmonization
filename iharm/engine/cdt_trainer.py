@@ -208,11 +208,11 @@ class CDTHTrainer(object):
             output = self.net(images, masks)
 
             loss = 0.0
-            # loss = self.add_loss('pixel_loss', loss, losses_logging, validation, output, batch_data)
+            loss = self.add_loss('pixel_loss', loss, losses_logging, validation, output, batch_data)
             loss = self.add_loss('rgb_loss',loss,losses_logging, validation, output, batch_data)
-            # loss = self.add_loss('refine_loss',loss,losses_logging, validation,output, batch_data)
+            loss = self.add_loss('refine_loss',loss,losses_logging, validation,output, batch_data)
             # print(losses_logging['pixel_loss'][-1])
-            print(losses_logging['rgb_loss'][-1])
+            # print(losses_logging['rgb_loss'][-1])
             # print(losses_logging['refine_loss'][-1])
             with torch.no_grad():
                 for metric in metrics:

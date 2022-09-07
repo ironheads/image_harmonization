@@ -26,14 +26,15 @@ def init_model(cfg):
     model_cfg.hr, model_cfg.lr = 1024, 256
     model_cfg.crop_size = (model_cfg.hr, model_cfg.hr)
     model_cfg.depth = 4
-    model_cfg.input_normalization = {
-        'mean': [.485, .456, .406],
-        'std': [.229, .224, .225]
-    }
-    
+    # model_cfg.input_normalization = {
+        # 'mean': [.485, .456, .406],
+        # 'std': [.229, .224, .225]
+    # }
+    model_cfg.input_normalization = False
+
     model_cfg.input_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(model_cfg.input_normalization['mean'], model_cfg.input_normalization['std']),
+        # transforms.Normalize(model_cfg.input_normalization['mean'], model_cfg.input_normalization['std']),
     ])
 
     model = CDTNet(model_cfg.depth,high_resolution=model_cfg.hr,low_resolution=model_cfg.lr)
@@ -111,13 +112,13 @@ def train(model, cfg, model_cfg, start_epoch=0):
         metrics=[
             DenormalizedPSNRMetric(
                 'images', 'target_images',
-                mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
-                std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
+                # mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
+                # std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
             ),
             DenormalizedMSEMetric(
                 'images', 'target_images',
-                mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
-                std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
+                # mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
+                # std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
             )
         ],
         checkpoint_interval=10,

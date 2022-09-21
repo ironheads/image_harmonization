@@ -8,11 +8,11 @@ from albumentations import HorizontalFlip, Resize, RandomResizedCrop
 from iharm.data.compose import ComposeDataset
 from iharm.data.hdataset import HDataset
 from iharm.data.transforms import HCompose
-from iharm.engine.cdt_trainer import CDTHTrainer
+from iharm.engine.dep_trainer import DEPHTrainer
 from iharm.model import initializer
-from iharm.model.base import CDTNet
+from iharm.model.base import DEPNet
 from iharm.model.losses import DownsampleLabelL1Loss, L1Loss
-from iharm.model.metrics import MSEMetric, PSNRMetric
+from iharm.model.metrics import DenormalizedMSEMetric, DenormalizedPSNRMetric
 from iharm.utils.log import logger
 
 
@@ -26,21 +26,21 @@ def init_model(cfg):
     model_cfg.hr, model_cfg.lr = 1024, 256
     model_cfg.crop_size = (model_cfg.hr, model_cfg.hr)
     model_cfg.depth = 4
-    # model_cfg.input_normalization = {
-        # 'mean': [.485, .456, .406],
-        # 'std': [.229, .224, .225]
-    # }
-    model_cfg.input_normalization = False
+    model_cfg.input_normalization = {
+        'mean': [.485, .456, .406],
+        'std': [.229, .224, .225]
+    }
+    # model_cfg.input_normalization = False
 
     model_cfg.input_transform = transforms.Compose([
         transforms.ToTensor(),
-        # transforms.Normalize(model_cfg.input_normalization['mean'], model_cfg.input_normalization['std']),
+        transforms.Normalize(model_cfg.input_normalization['mean'], model_cfg.input_normalization['std']),
     ])
 
-    model = CDTNet(model_cfg.depth,high_resolution=model_cfg.hr,low_resolution=model_cfg.lr)
+    model = DEPNet(model_cfg.depth,high_resolution=model_cfg.hr,low_resolution=model_cfg.lr)
 
     model.to(cfg.device)
-    model.init_weights(initializer.XavierGluon(rnd_type='gaussian', magnitude=2.0))
+    model.apply(initializer.XavierGluon(rnd_type='gaussian', magnitude=2.0))
 
     return model, model_cfg
 
@@ -55,12 +55,12 @@ def train(model, cfg, model_cfg, start_epoch=0):
     loss_cfg = edict()
     loss_cfg.pixel_loss = DownsampleLabelL1Loss('p2p_outputs','target_images', low_resolution=model_cfg.lr)
     loss_cfg.pixel_loss_weight = 1.0
-    loss_cfg.rgb_loss = L1Loss('c2c_outputs','target_images')
+    loss_cfg.rgb_loss = DownsampleLabelL1Loss('c2c_outputs','target_images')
     loss_cfg.rgb_loss_weight = 1.0
     loss_cfg.refine_loss = L1Loss('images','target_images')
     loss_cfg.refine_loss_weight = 1.0
 
-    num_epochs = 150
+    num_epochs = 120
 
     train_augmentator = HCompose([
         RandomResizedCrop(*crop_size, scale=(0.5, 1)),
@@ -102,23 +102,23 @@ def train(model, cfg, model_cfg, start_epoch=0):
     }
 
     lr_scheduler = partial(torch.optim.lr_scheduler.MultiStepLR,
-                           milestones=[80, 120], gamma=0.1)
-    trainer = CDTHTrainer(
+                           milestones=[60, 100], gamma=0.1)
+    trainer = DEPHTrainer(
         model, cfg, model_cfg, loss_cfg,
         trainset, valset,
         optimizer='adam',
         optimizer_params=optimizer_params,
         lr_scheduler=lr_scheduler,
         metrics=[
-            PSNRMetric(
+            DenormalizedPSNRMetric(
                 'images', 'target_images',
-                # mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
-                # std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
+                mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
+                std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
             ),
-            MSEMetric(
+            DenormalizedMSEMetric(
                 'images', 'target_images',
-                # mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
-                # std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
+                mean=torch.tensor(cfg.input_normalization['mean'], dtype=torch.float32).view(1, 3, 1, 1),
+                std=torch.tensor(cfg.input_normalization['std'], dtype=torch.float32).view(1, 3, 1, 1),
             )
         ],
         checkpoint_interval=10,

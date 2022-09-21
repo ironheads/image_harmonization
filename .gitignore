@@ -12,3 +12,5 @@ trilinear_cpp/build/
 trilinear_cpp/dist/
 
 trilinear_cpp/trilinear.egg-info/
+
+test.py

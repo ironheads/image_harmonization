@@ -22,7 +22,8 @@ RESIZE_STRATEGIES = {
     'None': NoOp(),
     'LimitLongest1024': LongestMaxSizeIfLarger(1024),
     'Fixed256': Resize(256, 256),
-    'Fixed512': Resize(512, 512)
+    'Fixed512': Resize(512, 512),
+    'Fixed1024': Resize(1024, 1024),
 }
 
 

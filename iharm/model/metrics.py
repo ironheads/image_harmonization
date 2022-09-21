@@ -46,7 +46,14 @@ class PSNRMetric(TrainMetric):
         squared_max = gt.max() ** 2
         psnr = 10 * torch.log10(squared_max / (mse + self.epsilon))
         return psnr.item()
+        
+class MSEMetric(TrainMetric):
+    def __init__(self, pred_output='instances', gt_output='instances'):
+        super(MSEMetric, self).__init__((pred_output, ), (gt_output, ))
 
+    def compute(self, pred, gt):
+        mse = F.mse_loss(pred * 255, gt * 255)
+        return mse.item()
 
 class DenormalizedTrainMetric(TrainMetric):
     def __init__(self, pred_outputs, gt_outputs, mean=None, std=None):

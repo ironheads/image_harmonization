@@ -1,4 +1,4 @@
-MODELS_PATH: "./harmonization_exps/models"
+MODELS_PATH: "./harmonization_exps/fixed256"
 EXPS_PATH: "./harmonization_exps"
 
 HFLICKR_PATH: "/data/sunzhangliang/IDIH/HFlickr"
